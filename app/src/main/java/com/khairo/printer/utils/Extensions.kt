@@ -1,10 +1,8 @@
 package com.khairo.printer.utils
 
 import android.annotation.SuppressLint
-import android.content.Context
+import android.util.Log
 import com.khairo.coroutines.CoroutinesEscPosPrinter
-import com.khairo.escposprinter.textparser.PrinterTextParserImg
-import com.khairo.printer.R
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -35,49 +33,10 @@ fun String.getDateTime(): String = SimpleDateFormat(this).format(Date()).replace
 
 
 @SuppressLint("UseCompatLoadingForDrawables")
-fun Context.printViaWifi(
+fun printViaWifi(
     printer: CoroutinesEscPosPrinter,
-    orderId: Int,
-    body: String,
-    totalBill: Float,
-    tax: Int,
-    customer: String = "",
-    barcode: String
+    body: String
 ): CoroutinesEscPosPrinter {
-
-    var test =
-        "[C]<img>" + PrinterTextParserImg.bitmapToHexadecimalString(
-            printer,
-            getDrawable(R.drawable.logo)
-        ) + "</img>\n" +
-                "[L]\n" +
-                "[C]<u><font size='big'>ORDER N°$orderId</font></u>\n" +
-                "[L]\n" +
-                "[C]<u type='double'>${"'on' yyyy-MM-dd 'at' HH:mm:ss".getDateTime()}</u>\n" +
-                "[C]================================\n" +
-                "[L]\n" +
-                "[L]    <b>Items</b>[R][R]<b>Qty</b>[R][R]<b>Price</b>\n" +
-                "[L][R]\n" +
-                "$body\n" +
-                "[L][R]\n" +
-                "[C]--------------------------------\n" +
-                "[R] TOTAL :[R]${totalBill} $\n"
-
-    test += if (tax != 0) "[R] TAX :[R]${tax} %\n" + "[R] GRAND TOTAL :[R]${totalBill * (tax / 100f) + totalBill} $\n" else ""
-
-    test += "[L][R]\n" +
-            "$customer\n" +
-            "[C]<barcode type='128' height='10'>$barcode</barcode>\n" +
-            "[L]\n" +
-            "[C]<u><font size='big'>VISIT HIS SITE</font></u>\n" +
-            "[L]\n" +
-            "[L]\n" +
-            "[C]<qrcode size='20'>http://www.developpeur-web.khairo.com/</qrcode>\n" +
-            "[L]\n" +
-            "[L]\n" +
-            "[L]\n" +
-            "[L]\n" +
-            "[L]\n"
-
-    return printer.setTextToPrint(test)
+    Log.d("PRINTER",printer.toString())
+    return printer.setTextToPrint(body)
 }

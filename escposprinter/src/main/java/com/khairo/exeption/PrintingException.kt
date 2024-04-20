@@ -61,7 +61,7 @@ fun onException(context: Context, result: Int) {
                 .setMessage("The application can't find any printer connected.")
                 .show()
             FINISH_PRINTER_DISCONNECTED -> AlertDialog.Builder(newContext)
-                .setTitle("Broken connection")
+                .setTitle("Broken connection - PRUEBA DANIEL")
                 .setMessage("Unable to connect the printer.")
                 .show()
             FINISH_PARSER_ERROR -> AlertDialog.Builder(newContext)

@@ -1,153 +1,362 @@
 package com.khairo.printer.ui
 
-import android.Manifest
+
 import android.annotation.SuppressLint
 import android.app.AlertDialog
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.hardware.usb.UsbDevice
-import android.hardware.usb.UsbManager
 import android.os.AsyncTask
+import android.os.Build
 import android.os.Bundle
-import android.os.Parcelable
+import android.text.Editable
 import android.util.DisplayMetrics
+import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
-import androidx.lifecycle.lifecycleScope
+import com.android.volley.Response
+import com.google.android.material.textfield.TextInputEditText
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.khairo.async.*
 import com.khairo.coroutines.CoroutinesEscPosPrint
 import com.khairo.coroutines.CoroutinesEscPosPrinter
 import com.khairo.escposprinter.EscPosPrinter
 import com.khairo.escposprinter.connection.DeviceConnection
 import com.khairo.escposprinter.connection.tcp.TcpConnection
-import com.khairo.escposprinter.connection.usb.UsbConnection
-import com.khairo.escposprinter.connection.usb.UsbPrintersConnections
 import com.khairo.escposprinter.exceptions.EscPosBarcodeException
 import com.khairo.escposprinter.exceptions.EscPosConnectionException
 import com.khairo.escposprinter.exceptions.EscPosEncodingException
 import com.khairo.escposprinter.exceptions.EscPosParserException
 import com.khairo.escposprinter.textparser.PrinterTextParserImg
 import com.khairo.printer.R
+import com.khairo.printer.brokers.VolleyBroker
 import com.khairo.printer.databinding.ActivityMainBinding
+import com.khairo.printer.models.detalleComanda
+import com.khairo.printer.models.encabezadoComanda
+import com.khairo.printer.models.printerObject
 import com.khairo.printer.utils.printViaWifi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import java.lang.reflect.Type
 import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
 import java.util.*
+
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
 
     private var printer: CoroutinesEscPosPrinter? = null
+    lateinit var volleyBroker: VolleyBroker
+    private var encabezados : List<encabezadoComanda> = listOf()
+    private var adrs : List<String> = listOf()
+    private var detalles : List<detalleComanda> = listOf()
+    private var exceptions: ArrayList<ArrayList<String>> = arrayListOf()
 
+
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
+        volleyBroker = VolleyBroker(this.applicationContext)
+
+        var loop = false
         super.onCreate(savedInstanceState)
+        //here is date pattern
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:SS")
+        var t = Timer()
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
-
         binding.apply {
+            buttonTcpStop.setOnClickListener {
+                buttonTcp.isEnabled = true
+                buttonTcp.isClickable = true
+                println("myHandler: IM STOPPING!")
+                loop = false
+                t.cancel()
+            }
+
+
             buttonTcp.setOnClickListener {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    printTcp()
-                }
+                t = Timer() //This is new
+                buttonTcp.isEnabled = false
+                buttonTcp.isClickable = false
+                t.scheduleAtFixedRate(
+                    object : TimerTask() {
+                        override fun run() {
+                            //Called each time when 1000 milliseconds (1 second) (the period parameter)
+
+                            val textInputLayout = findViewById<TextInputEditText>(R.id.id_store)
+                            val strTitle: Editable? = textInputLayout.text
+
+
+                            Log.d("IDSTORE", strTitle.toString())
+                            loop = true
+                            Log.d("TEXTO TO","myHandler: IM starting!")
+
+
+                            // Define a Runnable to execute printStuff() and post it to the Handler
+                            val mainScope = CoroutineScope(Dispatchers.Main)
+                            mainScope.launch(Dispatchers.Main) {
+                                var myCallback: (() -> Unit)? = null
+                                myCallback = {
+                                }
+                                printStuff(strTitle.toString(),myCallback)
+                            }
+                        }
+                    },  //Set how long before to start calling the TimerTask (in milliseconds)
+                    0,  //Set the amount of time between each execution (in milliseconds)
+                    90000
+                )
             }
 
-            buttonBluetooth.setOnClickListener {
-                printBluetooth()
-            }
+            /*
+            buttonTcp.setOnClickListener {
+                val textInputLayout = findViewById<TextInputEditText>(R.id.id_store)
+                val strTitle: Editable? = textInputLayout.text
 
-            buttonUsb.setOnClickListener {
-                printUsb()
-            }
-        }
-    }
 
-    /*==============================================================================================
-    ======================================BLUETOOTH PART============================================
-    ==============================================================================================*/
-    private val PERMISSION_BLUETOOTH = 1
+                Log.d("IDSTORE", strTitle.toString())
+                loop = true
+                buttonTcp.isEnabled = false
+                buttonTcp.isClickable = false
+                Log.d("TEXTO TO","myHandler: IM starting!")
 
-    private fun printBluetooth() {
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.BLUETOOTH),
-                PERMISSION_BLUETOOTH
-            )
-        } else {
-            // this.printIt(BluetoothPrintersConnections.selectFirstPaired());
-            AsyncBluetoothEscPosPrint(this).execute(this.getAsyncEscPosPrinter(null))
-        }
-    }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String?>,
-        grantResults: IntArray
-    ) {
-        if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            when (requestCode) {
-                PERMISSION_BLUETOOTH -> printBluetooth()
-            }
-        }
-    }
-
-    /*==============================================================================================
-    ===========================================USB PART=============================================
-    ==============================================================================================*/
-    private val ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION"
-    private val usbReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val action = intent.action
-            if (ACTION_USB_PERMISSION == action) {
-                synchronized(this) {
-                    val usbManager = getSystemService(USB_SERVICE) as UsbManager
-                    val usbDevice =
-                        intent.getParcelableExtra<Parcelable>(UsbManager.EXTRA_DEVICE) as UsbDevice?
-                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        if (usbDevice != null) {
-                            // printIt(new UsbConnection(usbManager, usbDevice));
-                            AsyncUsbEscPosPrint(context)
-                                .execute(
-                                    getAsyncEscPosPrinter(
-                                        UsbConnection(
-                                            usbManager,
-                                            usbDevice
-                                        )
-                                    )
-                                )
+                // Define a Runnable to execute printStuff() and post it to the Handler
+                val mainScope = CoroutineScope(Dispatchers.Main)
+                mainScope.launch(Dispatchers.Main) {
+                    var myCallback: (() -> Unit)? = null
+                    myCallback = {
+                        mainScope.launch(Dispatchers.Main) {
+                            //here is date
+                            latestPrintDate.text = LocalDateTime.now().format(formatter)
+                            Log.d("TEXTO TO", "FINISHED 5 SECOND LOOP")
+                            delay(10000L)
+                            if(loop){
+                                myCallback?.let { it1 -> printStuff(strTitle.toString(),it1) }
+                            }
                         }
                     }
+                    printStuff(strTitle.toString(),myCallback)
                 }
-            }
+            }*/
         }
     }
 
-    fun printUsb() {
-        val usbConnection = UsbPrintersConnections.selectFirstConnected(this)
-        val usbManager = this.getSystemService(USB_SERVICE) as UsbManager
-        if (usbConnection == null) {
-            AlertDialog.Builder(this)
-                .setTitle("USB Connection")
-                .setMessage("No USB printer found.")
-                .show()
-            return
-        }
-        val permissionIntent = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), 0)
-        val filter = IntentFilter(ACTION_USB_PERMISSION)
-        registerReceiver(usbReceiver, filter)
-        usbManager.requestPermission(usbConnection.device, permissionIntent)
+    suspend fun printStuff(id_store:String,callback: () -> Unit) {
+        volleyBroker.requestQueue.add(VolleyBroker.getRequest("getPrintData?idstore="+id_store+"&impresa=0",
+            { response ->
+                val jsonPrintObjectString = "${response}"
+                val collectionTypePrintObject: Type = object :
+                    TypeToken<List<printerObject?>?>() {}.type
+                val listPrintObject: List<printerObject> =
+                    Gson().fromJson(
+                        jsonPrintObjectString,
+                        collectionTypePrintObject
+                    ) as List<printerObject>
+
+                Log.d("ITEMS TO PRINT", jsonPrintObjectString)
+
+                var counter = 0 // initialize counter
+                GlobalScope.launch(Dispatchers.Default) {
+                    if(listPrintObject.isEmpty()){
+                        callback.invoke()
+                    }
+                    for (printObject in listPrintObject) {
+                        delay(1500)
+                        Log.d(
+                            "TEXTO TO",
+                            printObject.textToPrint + "IS PRINTING"
+                        )
+
+                        printTcp(
+                            printObject.textToPrint,
+                            printObject.ip,
+                            printObject.port,
+                            printObject.idbill,
+                            printObject.adr
+                        ) {
+
+                            if(exceptions.isEmpty()){
+
+                                volleyBroker.requestQueue.add(
+
+                                    com.khairo.escposprinter.brokers.VolleyBroker.getRequest("actualizar_estado_impresion_adr?idbill=" + printObject.idbill + "&NOMBRE_ADR=" + printObject.adr + "&respuestaimpresion=0&mensajeerror=EXITO_IMPRESION",
+                                        Response.Listener<String> { response ->
+
+                                            volleyBroker.requestQueue.add(VolleyBroker.getRequest(
+                                                "actualizar_estado_impresion_bill?id_bill=" + printObject.idbill,
+                                                Response.Listener<String> { response ->
+
+
+                                                    Log.d(
+                                                        "TEXTO TO",
+                                                        printObject.textToPrint + "WAS UPDATED"
+                                                    )
+
+                                                    counter++ // increment counter
+                                                    if (counter == listPrintObject.size) {
+                                                        callback.invoke() // call callback when loop is done
+                                                    }
+
+
+                                                },
+                                                Response.ErrorListener {
+
+                                                    volleyBroker.requestQueue.add(
+                                                        com.khairo.escposprinter.brokers.VolleyBroker.getRequest(
+                                                            "actualizar_estado_impresion_adr?idbill=" + printObject.idbill + "&NOMBRE_ADR=" + printObject.adr + "&respuestaimpresion=1&mensajeerror=error_Impresora",
+                                                            Response.Listener<String> { response ->
+
+                                                                Log.d(
+                                                                    "ERROR EN UPDATE",
+                                                                    it.toString()
+                                                                )
+                                                            },
+                                                            Response.ErrorListener {
+                                                                Log.d(
+                                                                    "ERROR EN FAILED UP ADR",
+                                                                    it.toString()
+                                                                )
+                                                            }
+                                                        ))
+                                                }
+                                            ))
+                                        },
+                                        Response.ErrorListener {
+                                            volleyBroker.requestQueue.add(
+                                                com.khairo.escposprinter.brokers.VolleyBroker.getRequest(
+                                                    "actualizar_estado_impresion_adr?idbill=" + printObject.idbill + "&NOMBRE_ADR=" + printObject.adr + "&respuestaimpresion=1&mensajeerror=error_Impresora",
+                                                    Response.Listener<String> { response ->
+
+                                                        Log.d(
+                                                            "ERROR EN UPDATE",
+                                                            it.toString()
+                                                        )
+                                                    },
+                                                    Response.ErrorListener {
+                                                        Log.d(
+                                                            "ERROR EN FAILED UP ADR",
+                                                            it.toString()
+                                                        )
+                                                    }
+                                                ))
+                                        }
+                                    ))
+                            }
+                            else {
+                                for (i in 0..exceptions.size - 1) {
+
+                                    if (exceptions[i][0] == printObject.adr && exceptions[i][1] == printObject.idbill) {
+
+                                        volleyBroker.requestQueue.add(
+                                            com.khairo.escposprinter.brokers.VolleyBroker.getRequest(
+                                                "actualizar_estado_impresion_adr?idbill=" + printObject.idbill + "&NOMBRE_ADR=" + printObject.adr + "&respuestaimpresion=1&mensajeerror=error_Impresora",
+                                                Response.Listener<String> { response ->
+
+                                                    Log.d(
+                                                        "ERROR EN UPDATE",
+                                                        "Error al IMPRIMIR"
+                                                    )
+                                                },
+                                                Response.ErrorListener {
+                                                    Log.d(
+                                                        "ERROR EN FAILED UP ADR",
+                                                        it.toString()
+                                                    )
+                                                }
+                                            ))
+                                    } else {
+
+                                        volleyBroker.requestQueue.add(
+
+                                            com.khairo.escposprinter.brokers.VolleyBroker.getRequest(
+                                                "actualizar_estado_impresion_adr?idbill=" + printObject.idbill + "&NOMBRE_ADR=" + printObject.adr + "&respuestaimpresion=0&mensajeerror=EXITO_IMPRESION",
+                                                Response.Listener<String> { response ->
+
+                                                    volleyBroker.requestQueue.add(VolleyBroker.getRequest(
+                                                        "actualizar_estado_impresion_bill?id_bill=" + printObject.idbill,
+                                                        Response.Listener<String> { response ->
+
+
+                                                            Log.d(
+                                                                "TEXTO TO",
+                                                                printObject.textToPrint + "WAS UPDATED"
+                                                            )
+
+                                                            counter++ // increment counter
+                                                            if (counter == listPrintObject.size) {
+                                                                callback.invoke() // call callback when loop is done
+                                                            }
+
+
+                                                        },
+                                                        Response.ErrorListener {
+
+                                                            volleyBroker.requestQueue.add(
+                                                                com.khairo.escposprinter.brokers.VolleyBroker.getRequest(
+                                                                    "actualizar_estado_impresion_adr?idbill=" + printObject.idbill + "&NOMBRE_ADR=" + printObject.adr + "&respuestaimpresion=1&mensajeerror=error_Impresora",
+                                                                    Response.Listener<String> { response ->
+
+                                                                        Log.d(
+                                                                            "ERROR EN UPDATE",
+                                                                            it.toString()
+                                                                        )
+                                                                    },
+                                                                    Response.ErrorListener {
+                                                                        Log.d(
+                                                                            "ERROR EN FAILED UP ADR",
+                                                                            it.toString()
+                                                                        )
+                                                                    }
+                                                                ))
+                                                        }
+                                                    ))
+                                                },
+                                                Response.ErrorListener {
+                                                    volleyBroker.requestQueue.add(
+                                                        com.khairo.escposprinter.brokers.VolleyBroker.getRequest(
+                                                            "actualizar_estado_impresion_adr?idbill=" + printObject.idbill + "&NOMBRE_ADR=" + printObject.adr + "&respuestaimpresion=1&mensajeerror=error_Impresora",
+                                                            Response.Listener<String> { response ->
+
+                                                                Log.d(
+                                                                    "ERROR EN UPDATE",
+                                                                    it.toString()
+                                                                )
+                                                            },
+                                                            Response.ErrorListener {
+                                                                Log.d(
+                                                                    "ERROR EN FAILED UP ADR",
+                                                                    it.toString()
+                                                                )
+                                                            }
+                                                        ))
+                                                }
+                                            ))
+                                    }
+
+                                    if (i == exceptions.size - 1) {
+                                        exceptions = arrayListOf()
+                                    }
+
+
+                                }
+                            }
+
+                        }
+                    }
+
+
+
+
+                }
+            },
+            {
+
+                Log.d("ERROR EN ENCABEZADOS", it.toString())
+                callback.invoke()
+            }
+        ))
     }
+
+
 
     /*==============================================================================================
     ===================================ESC/POS PRINTER PART=========================================
@@ -179,7 +388,7 @@ class MainActivity : AppCompatActivity() {
                                 "[C]<u><font size='big'>ORDER N°045</font></u>\n" +
                                 "[C]<font size='small'>" + format.format(Date()) + "</font>\n" +
                                 "[L]\n" +
-                                "[C]==================عربي تيست هههههههه==============\n" +
+                                "[C]=================="+"Pong!"+"==============\n" +
                                 "[L]\n" +
                                 "[L]<b>BEAUTIFUL SHIRT</b>[R]9.99e\n" +
                                 "[L]  + Size : S\n" +
@@ -291,70 +500,46 @@ class MainActivity : AppCompatActivity() {
     /*==============================================================================================
     =========================================TCP PART===============================================
     ==============================================================================================*/
-    private suspend fun printTcp() {
+
+    private suspend fun printTcp(textToPrint:String,ip:String,port:String,id_bill:String,adr:String,callback: () -> Unit) {
         try {
+           // /*
+            var tcpConnector = TcpConnection(
+                ip,
+                port.toInt(),
+                adr,
+                id_bill
+            )
             printer =
                 CoroutinesEscPosPrinter(
-                    TcpConnection(
-                        binding.tcpIp.text.toString(),
-                        binding.tcpPort.text.toString().toInt()
-                    ).apply { connect(this@MainActivity) }, 203, 48f, 32
+                    tcpConnector.apply { connect(this@MainActivity) }, 203, 60f, 48
                 )
-
-//             this.printIt(new TcpConnection(ipAddress.getText().toString(), Integer.parseInt(portAddress.getText().toString())));
-//            AsyncTcpEscPosPrint(this).execute(printer.setTextToPrint(test))
 
             CoroutinesEscPosPrint(this).execute(
                 printViaWifi(
                     printer!!,
-                    45,
-                    body,
-                    34.98f,
-                    4,
-                    customer,
-                    "83125478455134567890"
+                    textToPrint,
                 )
-            ).apply { printer = null }
+            ).apply { printer = null
+                      var tmpExceptions = tcpConnector.getExceptions()
+                      for(i in 0..tmpExceptions.size-1){
+                          exceptions.add(tmpExceptions[i])
+                      }
+                      callback.invoke()
+                    }
 
-        } catch (e: NumberFormatException) {
-            AlertDialog.Builder(this)
-                .setTitle("Invalid TCP port address")
-                .setMessage("Port field must be a number.")
-                .show()
+            // */
+
+            //callback.invoke()
+
+        } catch (e: Exception) {
+            Log.d("ERROR ",e.toString())
+
             e.printStackTrace()
         }
     }
+}
 
-    private val body: String
-        get() = "[L]\n" +
-                "[L]    <b>Pizza</b>[R][R]3[R][R]55 $\n" +
-                "[L]      + Olive[R][R]1 $\n" +
-                "[L]      + Cheese[R][R]5 $\n" +
-                "[L]      + Mushroom[R][R]7 $\n" +
-                "[L]\n" +
-                "[L]    <b>Burger</b>[R][R]7[R][R]43.54 $\n" +
-                "[L]      + Cheese[R][R]3 $\n" +
-                "[L]\n" +
-                "[L]    <b>Shawarma</b>[R][R]2[R][R]4 $\n" +
-                "[L]      + Garlic[R][R]0.5 $\n" +
-                "[L]\n" +
-                "[L]    <b>Steak</b>[R][R]3[R][R]75 $\n" +
-                "[L]\n" +
-                "[R] PAYMENT METHOD :[R]Visa\n"
-
-    private val customer: String
-        get() =
-            "[C]================================\n" +
-                    "[L]\n" +
-                    "[L]<b>Delivery</b>[R]5 $\n" +
-                    "[L]\n" +
-                    "[L]<u><font color='bg-black' size='tall'>Customer :</font></u>\n" +
-                    "[L]Name : Mohammad khair\n" +
-                    "[L]Phone : 00962787144627\n" +
-                    "[L]Area : Khalda\n" +
-                    "[L]street : testing street\n" +
-                    "[L]building : 9\n" +
-                    "[L]Floor : 2\n" +
-                    "[L]Apartment : 1\n" +
-                    "[L]Note : This order is just for testing\n"
+interface VolleyListener {
+    fun requestFinished(exsitance: Boolean)
 }

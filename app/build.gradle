@@ -48,6 +48,12 @@ dependencies {
     implementation 'com.google.android.material:material:1.2.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
 
+    //Volley
+    implementation 'com.android.volley:volley:1.2.1'
+
+    //Gson
+    implementation 'com.google.code.gson:gson:2.8.5'
+
     //testing unit
     testImplementation 'junit:junit:4.13.1'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
@@ -55,6 +61,9 @@ dependencies {
 
     //databinding
     kapt "com.android.databinding:compiler:3.2.1"
+
+    //playservices
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.1.1'
 
     //coroutines
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines"
