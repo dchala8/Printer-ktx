@@ -69,7 +69,7 @@ class MainActivity : AppCompatActivity() {
             buttonTest.setOnClickListener {
                 val textInputLayout = findViewById<TextInputEditText>(R.id.id_store)
                 val strTitle: Editable? = textInputLayout.text
-                volleyBroker.requestQueue.add(VolleyBroker.getRequest("getPrintData?idstore="+strTitle.toString()+"&impresa=0",
+                volleyBroker.requestQueue.add(VolleyBroker.getRequest("getPrinters?idstore="+strTitle.toString(),
                     { response ->
                         val jsonPrintObjectString = "${response}"
                         val collectionTypePrintObject: Type = object :
