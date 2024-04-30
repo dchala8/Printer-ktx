@@ -10,5 +10,6 @@
     <string name="port">Port :</string>
     <string name="ex_port">9100</string>
     <string name="print_by_tcp">Start Print Timer!</string>
+    <string name="test_print">Start Printing Test!</string>
     <string name="stop_by_tcp">STOP PRINTING!</string>
 </resources>

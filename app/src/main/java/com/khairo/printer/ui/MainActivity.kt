@@ -30,6 +30,7 @@ import com.khairo.escposprinter.textparser.PrinterTextParserImg
 import com.khairo.printer.R
 import com.khairo.printer.brokers.VolleyBroker
 import com.khairo.printer.databinding.ActivityMainBinding
+import com.khairo.printer.models.ImpresoraObject
 import com.khairo.printer.models.detalleComanda
 import com.khairo.printer.models.encabezadoComanda
 import com.khairo.printer.models.printerObject
@@ -64,6 +65,42 @@ class MainActivity : AppCompatActivity() {
         var t = Timer()
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
         binding.apply {
+
+            buttonTest.setOnClickListener {
+                val textInputLayout = findViewById<TextInputEditText>(R.id.id_store)
+                val strTitle: Editable? = textInputLayout.text
+                volleyBroker.requestQueue.add(VolleyBroker.getRequest("getPrintData?idstore="+strTitle.toString()+"&impresa=0",
+                    { response ->
+                        val jsonPrintObjectString = "${response}"
+                        val collectionTypePrintObject: Type = object :
+                            TypeToken<List<ImpresoraObject?>?>() {}.type
+                        val listPrintObject: List<ImpresoraObject> =
+                            Gson().fromJson(
+                                jsonPrintObjectString,
+                                collectionTypePrintObject
+                            ) as List<ImpresoraObject>
+                        GlobalScope.launch(Dispatchers.Default) {
+                            for (printObject in listPrintObject) {
+                                printTcp(
+                                    "[C]<b><font size='big'>TEST</font></b>\n",
+                                    printObject.ip,
+                                    "9100",
+                                    "-1",
+                                    printObject.nombre
+                                ) {
+
+                                }
+
+                            }
+                        }
+                    },
+                    {
+
+                        Log.d("ERROR EN ENCABEZADOS", it.toString())
+                    }))
+            }
+
+
             buttonTcpStop.setOnClickListener {
                 buttonTcp.isEnabled = true
                 buttonTcp.isClickable = true
@@ -182,7 +219,7 @@ class MainActivity : AppCompatActivity() {
                                         Response.Listener<String> { response ->
 
                                             volleyBroker.requestQueue.add(VolleyBroker.getRequest(
-                                                "actualizar_estado_impresion_bill?id_bill=" + printObject.idbill,
+                                                "actualizar_estado_impresion_bill?idbill=" + printObject.idbill,
                                                 Response.Listener<String> { response ->
 
 
@@ -190,6 +227,7 @@ class MainActivity : AppCompatActivity() {
                                                         "TEXTO TO",
                                                         printObject.textToPrint + "WAS UPDATED"
                                                     )
+
 
                                                     counter++ // increment counter
                                                     if (counter == listPrintObject.size) {
@@ -272,7 +310,7 @@ class MainActivity : AppCompatActivity() {
                                                 Response.Listener<String> { response ->
 
                                                     volleyBroker.requestQueue.add(VolleyBroker.getRequest(
-                                                        "actualizar_estado_impresion_bill?id_bill=" + printObject.idbill,
+                                                        "actualizar_estado_impresion_bill?idbill=" + printObject.idbill,
                                                         Response.Listener<String> { response ->
 
 
